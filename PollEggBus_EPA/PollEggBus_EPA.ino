@@ -1,6 +1,7 @@
 /* Sketch for using the AQE shield with Arduino Uno
    Copied from: https://github.com/jmsaavedra/Air-Quality-Egg/tree/master/libraries/EggBus
    Adapted by Michael van den Bossche
+   Version 5.1 - Used RTC to write time stamp for the air quality measurements.
    Version 5.0 - included RTC to keep time.
    Version 4.0 - updated the SD card library to use fat32 for cards > 4GB. Library made by Bill Greiman
    Version 3.0 - changed the library for the DHT22 - now using the library by Rob Tillaart: https://github.com/RobTillaart/Arduino
@@ -43,10 +44,8 @@ void setup(){
   RTC.begin();
   // RTC.adjust(dt);  
   
-  Serial.println(F("Air Quality Egg - EPA Serial Build v1.0"));
-  Serial.println(F("======================================================================\r\n"));
-  Serial.println(F("Timestamp, Sensor Type, Sensor Value, Sensor Units, Sensor Resistance"));
-  Serial.println(F("----------------------------------------------------------------------"));  
+  Serial.println(F("Sensor Type, Sensor Value, Sensor Units, Sensor Resistance"));
+  Serial.println(F("----------------------------------------------------------"));  
 
   // Initialize SdFat or print a detailed error message and halt
   // Use half speed like the native library.
@@ -59,7 +58,7 @@ void setup(){
 
   
   // logging header
-  myFile.println("timestamp [ms?],[NO2] [ppb],[CO] [ppb],[O3] [ppb],PM,RH [%RH],T [oC]");
+  myFile.println("date,time,reltime,NO2 [ppb],CO [ppb],O3 [ppb],PM,RH [%RH],T [oC]");
     
   myFile.close();
 }
@@ -69,7 +68,7 @@ DateTime lastSensorRead;
 boolean OneSecondHasPassed(void)
 {
   DateTime rightNow = RTC.now();
-  if(rightNow.get() >= lastSensorRead.get() + 6) //egads, who is the incompetent who wrote the RTC library?
+  if(rightNow.get() >= lastSensorRead.get() + 10)  // do sensor measurements every 10 seconds
   {
     lastSensorRead = rightNow;
     return true;
@@ -86,15 +85,14 @@ void loop(){
   
     eggBus.init();
 
-    outputString = Float2String(millis());
+    outputString = makePrettyTime();
+	Serial.println(outputString);
     outputString += ',';
-  
+
     while((egg_bus_address = eggBus.next())){
       uint8_t numSensors = eggBus.getNumSensors();
       for(uint8_t ii = 0; ii < numSensors; ii++){
-        Serial.print(millis(), DEC);
-        Serial.print(F(", "));      
-      
+        
         Serial.print(eggBus.getSensorType(ii));
         Serial.print(F(", "));
       
@@ -155,14 +153,6 @@ void loop(){
     myFile.close(); 
   }
 }
-void printAddress(uint8_t * address){
-  for(uint8_t jj = 0; jj < 6; jj++){
-    if(address[jj] < 16) Serial.print("0");
-    Serial.print(address[jj], HEX);
-    if(jj != 5 ) Serial.print(":");
-  }
-  Serial.println();
-}
 
 String Float2String(const float& ff)
 {
@@ -172,4 +162,12 @@ String Float2String(const float& ff)
 
   return String(tempStr);
 }
+
+String makePrettyTime(void)
+{
+  DateTime now = RTC.now(); //get the current date-time
+  char timestamp[32];
+  sprintf(timestamp, "%04d-%02d-%02d,%02d:%02d:%02d,%i", now.year(), now.month(), now.date(), now.hour(), now.minute(), now.second(), now.get());
+  return String(timestamp);
+}  
 
