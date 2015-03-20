@@ -1,11 +1,13 @@
 /* Sketch for using the AQE shield with Arduino Uno
    Copied from: https://github.com/jmsaavedra/Air-Quality-Egg/tree/master/libraries/EggBus
    Adapted by Michael van den Bossche
+   Version 3.0 - changed the library for the DHT22 - now using the library by Rob Tillaart: https://github.com/RobTillaart/Arduino
    Version 2.0 - included writing to SD card using the Fat16 library.
+
 */
 
 #include <stdint.h>
-#include <DHT.h>
+#include <dht.h>
 #include "Wire.h"
 #include "EggBus.h"
 #include <Fat16.h>       // for SD disk
@@ -17,9 +19,10 @@ EggBus eggBus;
 char name [13] = "AQE001.CSV";
 String outputString;
 
-#define DHTPIN 17 //analog pin 3
-#define DHTTYPE DHT22  
-DHT dht(DHTPIN, DHTTYPE);
+//From dht22_test (Tillaart) 
+dht DHT;
+#define DHT22_PIN A3 //analog pin 3
+//end portion from dht22_test
 
 SdCard card;         
 Fat16 file; 
@@ -104,13 +107,16 @@ void loop(){
       Serial.println();
     }
   }
-
+  uint32_t start = micros();
+  int chk = DHT.read22(DHT22_PIN);
+  uint32_t stop = micros();
+  
   Serial.print(millis(), DEC);
   Serial.print(F(", "));      
   
   Serial.print("Humidity");
   Serial.print(F(", "));
-  float currHumidity = getHumidity();
+  float currHumidity = DHT.humidity;
   Serial.print(currHumidity, 8);
   Serial.print(F(", "));      
 
@@ -125,7 +131,7 @@ void loop(){
   
   Serial.print("Temperature");
   Serial.print(F(", "));
-  float currentTemperature = getTemperature();
+  float currentTemperature = DHT.temperature;
   Serial.print(currentTemperature, 8);
   Serial.print(F(", "));      
 
@@ -158,34 +164,6 @@ void printAddress(uint8_t * address){
     if(jj != 5 ) Serial.print(":");
   }
   Serial.println();
-}
-
-//--------- DHT22 humidity ---------
-float getHumidity(){
-  float h = dht.readHumidity();
-  if (isnan(h)){
-    //failed to get reading from DHT    
-    delay(2500);
-    h = dht.readHumidity();
-    if(isnan(h)){
-      return -1; 
-    }
-  } 
-  else return h;
-}
-
-//--------- DHT22 temperature ---------
-float getTemperature(){
-  float t = dht.readTemperature();
-  if (isnan(t)){
-    //failed to get reading from DHT
-    delay(2500);
-    t = dht.readTemperature();
-    if(isnan(t)){
-      return -1; 
-    }
-  } 
-  return t;
 }
 
 String Float2String(const float& ff)
