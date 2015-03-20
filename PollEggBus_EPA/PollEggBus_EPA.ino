@@ -1,6 +1,7 @@
 /* Sketch for using the AQE shield with Arduino Uno
    Copied from: https://github.com/jmsaavedra/Air-Quality-Egg/tree/master/libraries/EggBus
    Adapted by Michael van den Bossche
+   Version 4.0 - updated the SD card library to use fat32 for cards > 4GB. Library made by Bill Greiman
    Version 3.0 - changed the library for the DHT22 - now using the library by Rob Tillaart: https://github.com/RobTillaart/Arduino
    Version 2.0 - included writing to SD card using the Fat16 library.
 
@@ -10,8 +11,7 @@
 #include <dht.h>
 #include "Wire.h"
 #include "EggBus.h"
-#include <Fat16.h>       // for SD disk
-#include <Fat16util.h>   // for SD disk
+#include <SdFat.h>          // include the SdFat library
 
 EggBus eggBus;
 
@@ -24,22 +24,12 @@ dht DHT;
 #define DHT22_PIN A3 //analog pin 3
 //end portion from dht22_test
 
-SdCard card;         
-Fat16 file; 
+SdFat sd;                   // Start the SdFat object, call it 'sd' (could be called anything).
+SdFile myFile;              // start the SdFile object, call it 'myFile'.
 
 // store error strings in flash to save RAM
 // from Stalkerv21_DataLogger_5min example
 #define error(s) error_P(PSTR(s))
-
-void error_P(const char* str) {
-  PgmPrint("error: ");
-  SerialPrintln_P(str);
-  if (card.errorCode) {
-    PgmPrint("SD error: ");
-    Serial.println(card.errorCode, HEX);
-  }
-  while(1);
-}
 
 void setup(){
   Serial.begin(9600);
@@ -48,28 +38,20 @@ void setup(){
   Serial.println(F("Timestamp, Sensor Type, Sensor Value, Sensor Units, Sensor Resistance"));
   Serial.println(F("----------------------------------------------------------------------"));  
 
-  // from Stalkerv21_DataLogger_5min example
-  // initialize the SD card
-  if (!card.init()) error("card.init");
-   
-  // initialize a FAT16 volume
-  if (!Fat16::init(&card)) error("Fat16::init");
-  
-  // clear write error
-  file.writeError = false;
-  
-  // O_CREAT - create the file if it does not exist
-  // O_APPEND - seek to the end of the file prior to each write
-  // O_WRITE - open for write
-  if (!file.open(name, O_CREAT | O_APPEND | O_WRITE))
-      error("error opening file");
+  // Initialize SdFat or print a detailed error message and halt
+  // Use half speed like the native library.
+  // change to SPI_FULL_SPEED for more performance.
+  // ON SEEEDUINO STALKER V2.3, THIS IS PIN 10. SdFat handles setting SS
+  if (!sd.begin(10, SPI_HALF_SPEED)) sd.initErrorHalt();
+
+  // open the file for write at end ('Append').
+  if (!myFile.open(name, O_RDWR | O_CREAT | O_AT_END)) sd.errorHalt();
+
   
   // logging header
-  file.println("timestamp [ms?],[NO2] [ppb],[CO] [ppb],[O3] [ppb],PM,RH [%RH],T [oC]");
+  myFile.println("timestamp [ms?],[NO2] [ppb],[CO] [ppb],[O3] [ppb],PM,RH [%RH],T [oC]");
     
-  if (!file.close()) 
-      error("error closing file");
-
+  myFile.close();
 }
 
 void loop(){
@@ -141,20 +123,11 @@ void loop(){
   outputString += Float2String(currentTemperature);
   Serial.println();
 
-  // clear write error
-  file.writeError = false;
+  if (!sd.begin(10, SPI_HALF_SPEED)) sd.initErrorHalt();
+  if (!myFile.open(name, O_RDWR | O_CREAT | O_AT_END)) sd.errorHalt();
+  myFile.println(outputString);
   
-  // O_CREAT - create the file if it does not exist
-  // O_APPEND - seek to the end of the file prior to each write
-  // O_WRITE - open for write
-  if (!file.open(name, O_CREAT | O_APPEND | O_WRITE))
-    error("error opening file");  
-
-  file.println(outputString);
-  
-  if (!file.close()) 
-    error("error closing file");
- 
+  myFile.close(); 
 }
 
 void printAddress(uint8_t * address){
